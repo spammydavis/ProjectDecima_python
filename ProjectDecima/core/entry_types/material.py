@@ -100,8 +100,7 @@ class SamplerBindingWithHandle(ShaderSamplerBinding):
 
     def parse(self, reader: ByteIODS):
         super().parse(reader)
-        self.sampler_binding_handle = reader.read_uint32()
-
+        self.sampler_binding_handle = reader.read_uint64()
 
 class ShaderTextureBinding:
     def __init__(self):
@@ -124,8 +123,10 @@ class TextureBindingWithHandle(ShaderTextureBinding):
 
     def parse(self, reader: ByteIODS, core_file):
         super().parse(reader, core_file)
-        self.texture_binding_handle = reader.read_uint32()
-        self.swizzle_binding_handle = reader.read_uint32()
+        self.texture_binding_handle = reader.read_uint64()
+        self.swizzle_binding_handle = reader.read_uint64()
+
+		
 
 
 class EShaderVariableType(IntEnum):
@@ -176,11 +177,13 @@ class ShaderVariableBinding:
         self.animator = EntryReference()
 
     def parse(self, reader: ByteIODS, core_file):
-        (self.binding_name_hash, self.variable_id_hash) = reader.read_fmt('2I')
-        self.type = EShaderVariableType(reader.read_uint8())
         self.variable_data = reader.read_bytes(16)
+        self.binding_name_hash = reader.read_uint32()
+        self.variable_id_hash = reader.read_uint32()
+        #(self.binding_name_hash, self.variable_id_hash) = reader.read_fmt('2I')
+        self.type = EShaderVariableType(reader.read_uint8())
         self.animator.parse(reader, core_file)
-
+        reader.read_uint32()
 
 class VariableBindingWithHandle(ShaderVariableBinding):
     def __init__(self):
@@ -201,7 +204,7 @@ class SRTBindingCache:
         self.srt_entry_handles = []
 
     def parse(self, reader: ByteIODS):
-        self.texture_binding_mask, self.binding_data_mask, self.srt_entries_mask = reader.read_fmt('BHQ')
+        #self.texture_binding_mask, self.binding_data_mask, self.srt_entries_mask = reader.read_fmt('BHQ')
         array_size = reader.read_uint32()
         self.binding_data_indices = reader.read_fmt(f'{array_size}H')
         array_size = reader.read_int32()
@@ -226,10 +229,10 @@ class RenderTechnique:
         self.force_lod_fade = 0
 
     def parse(self, reader: ByteIODS, core_file):
-        self.state = reader.read_bytes(1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 4 + 4 + 2 + 2 + 4)
+        self.state = reader.read_bytes(19)
         self.srt_binding_cache.parse(reader)
-        self.type = ERenderTechniqueType(reader.read_uint8())
-        self.gpu_skinned = reader.read_uint8()
+        self.type = ERenderTechniqueType(reader.read_uint32())
+        self.gpu_skinned = reader.read_uint8()	
         self.write_global_vertex_cache = reader.read_uint8()
         self.camera_facing = reader.read_uint8()
         self.initially_enabled = reader.read_uint8()
@@ -250,8 +253,9 @@ class RenderTechnique:
             bind.parse(reader, core_file)
             self.variable_binding.append(bind)
         self.shader.parse(reader, core_file)
-        self.id = reader.read_uint32()
+        self.id = reader.read_uint64()
         self.force_lod_fade = reader.read_uint8()
+
 
 
 class RenderTechniqueSet:
@@ -259,46 +263,19 @@ class RenderTechniqueSet:
         self.render_techniques: List[RenderTechnique] = []
         self.type = ERenderTechniqueSetType.Invalid_rendering_techniques
         self.effect_type = ERenderEffectType.Object_render_effect
-        # self.unks_0 = []
-        # self.unk_shorts_1 = []
-        # self.unk_blocks_2 = []
-        # self.unk_3 = 0
-        # self.unk_4 = 0
-        # self.unk_5 = 0
-        # self.unk_blocks_6 = []
-        # self.unks_7 = []
-        # self.unks_8 = []
-        #
-        # self.vars: List[MatVar] = []
-        # self.shader_ref = EntryReference()
 
     def parse(self, reader: ByteIODS, core_file):
-        array_size = reader.read_uint32()
+        array_size = reader.read_uint32()		
         for _ in range(array_size):
             rt = RenderTechnique()
             rt.parse(reader, core_file)
             self.render_techniques.append(rt)
-        self.type = ERenderTechniqueSetType(reader.read_int32())
+
+        self.type = ERenderTechniqueSetType(reader.read_uint32())
         self.effect_type = ERenderEffectType(reader.read_int32())
-        # self.unks_0 = reader.read_fmt(f'{20 // 4}I')
-        # unk_count = reader.read_uint32()
-        # self.unk_shorts_1 = reader.read_fmt(f'{unk_count}H')
-        # unk_block_count = reader.read_uint32()
-        # for _ in range(unk_block_count):
-        #     self.unk_blocks_2.append(reader.read_fmt('<BBIBB'))
-        # self.unk_3, self.unk_4, self.unk_5 = reader.read_fmt('3I')
-        # unk_block_count = reader.read_uint32()
-        # for _ in range(unk_block_count):
-        #     self.unk_blocks_6.append(reader.read_bytes(16))
-        # ref_count = reader.read_uint32()
-        # if ref_count > 0:
-        #     self.unks_8 = reader.read_fmt(f'4I')
-        # else:
-        #     self.unks_8 = reader.read_fmt('I')
-        # for _ in range(ref_count):
-        #     var = MatVar().parse(reader, core_file)
-        #     self.vars.append(var)
-        # self.shader_ref.parse(reader, core_file)
+        TechMask = reader.read_int32()
+        InitEnabledMask = reader.read_int32()
+
         return self
 
 
@@ -313,18 +290,32 @@ class RenderEffectResource(CoreDummy):
         self.technique_sets: List[RenderTechniqueSet] = []
 
     def parse(self, reader: ByteIODS, core_file):
-        with open('SHADING_GROUP.bin', 'wb') as f:
+        if 0 :
+          with open('SHADING_GROUP.bin', 'wb') as f:
             with reader.save_current_pos():
                 reader.seek(0)
                 f.write(reader.read_bytes(-1))
+
         self.header.parse(reader)
+        start_pos = reader.tell();
         self.guid = reader.read_guid()
+        #print ("parse <" , __class__.__name__, "> <", self.guid, ">", core_file.filepath, f' size<{hex(self.header.size)}> spos<{hex(start_pos)}>')
         self.object_attribute_animator_resource.parse(reader, core_file)
         array_size = reader.read_uint32()
         for _ in range(array_size):
             entry = RenderTechniqueSet().parse(reader, core_file)
-
             self.technique_sets.append(entry)
+        cur_pos = reader.tell();
+        footer_bytes = 18;
+        end_pos = start_pos + self.header.size - footer_bytes;
+        reader.seek(end_pos);
+        SortMode = reader.read_uint32();
+        SortOrder = reader.read_uint32();
+        EffectType = reader.read_uint32();
+        MakeAccumulationBufferCopy = reader.read_uint8();
+        ForwardIgonoreLocalIndirectLighting = reader.read_uint8();
+        EnvironmentInteractionTargets = reader.read_uint32();
+        #print ("done parse <" , __class__.__name__, "> <", self.guid, ">")
 
 
 EntryTypeManager.register_handler(RenderEffectResource)

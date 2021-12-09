@@ -3,7 +3,8 @@ from pathlib import Path
 
 from ProjectDecima.archive.archive_manager import ArchiveManager
 from ProjectDecima.core.entry_reference import EntryReference
-from ProjectDecima.core.stream_reference import StreamReference
+#from ProjectDecima.core.stream_reference import StreamReference
+from ProjectDecima.core.stream_reference import StreamingDataSource
 from ProjectDecima.core.core_file import CoreFile
 from ProjectDecima.archive.archive import Archive
 
